@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>联机五子棋 · 好友对战 · 无时间限制</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(135deg, #1a4d3e 0%, #0f2c23 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            padding: 20px;
+        }
+
+        .game-wrapper {
+            background: #e3cd9c;
+            background-image: radial-gradient(circle at 25% 40%, rgba(200, 170, 110, 0.3) 2%, transparent 2.5%);
+            background-size: 32px 32px;
+            border-radius: 48px;
+            padding: 20px 18px 24px 18px;
+            box-shadow: 0 20px 35px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 200, 0.7);
+        }
+
+        .board-panel {
+            background: #f7efcf;
+            border-radius: 28px;
+            padding: 14px;
+            box-shadow: inset 0 0 0 2px #fffae8, 0 8px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #faf0cf;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            height: auto;
+        }
+
+        .info-bar {
+            margin-top: 20px;
+            background: #2e2a24cc;
+            backdrop-filter: blur(8px);
+            border-radius: 48px;
+            padding: 12px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: #fef0cf;
+            font-weight: 600;
+        }
+
+        .turn-box {
+            background: #3e2c1f;
+            padding: 6px 18px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.95rem;
+        }
+
+        .piece-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+        }
+
+        .piece-black {
+            background: radial-gradient(circle at 35% 35%, #2b2b2b, #0a0a0a);
+            box-shadow: inset -1px -1px 0 #444;
+        }
+
+        .piece-white {
+            background: radial-gradient(circle at 35% 35%, #f5f5fa, #c0c0cf);
+        }
+
+        .room-section {
+            background: #1f2c27;
+            padding: 5px 16px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+        }
+
+        .room-code {
+            font-family: monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: #00000066;
+            padding: 4px 12px;
+            border-radius: 32px;
+            letter-spacing: 1px;
+        }
+
+        button {
+            background: #ffcd7e;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 32px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.12s linear;
+            color: #2c241a;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        .btn-danger {
+            background: #d98c5f;
+            color: white;
+        }
+
+        .btn-success {
+            background: #5f8b6f;
+            color: white;
+        }
+
+        .status-text {
+            background: #00000077;
+            padding: 4px 12px;
+            border-radius: 32px;
+            font-size: 0.8rem;
+        }
+
+        .mode-badge {
+            background: #4f3a28;
+            padding: 4px 12px;
+            border-radius: 32px;
+        }
+
+        .link-copy-area {
+            margin-top: 14px;
+            background: #2b342e;
+            border-radius: 44px;
+            padding: 8px 16px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .link-copy-area input {
+            flex: 1;
+            background: #fef1d4;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 32px;
+            font-size: 0.8rem;
+            outline: none;
+            font-family: monospace;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 18px;
+            color: #e2d6b3;
+        }
+
+        @media (max-width: 560px) {
+            .info-bar { flex-direction: column; align-items: stretch; }
+            .room-section { justify-content: space-between; }
+            .turn-box { justify-content: center; }
+        }
+
+        .mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .mask-content {
+            background: #fdf8ed;
+            padding: 28px 32px;
+            border-radius: 48px;
+            text-align: center;
+            box-shadow: 0 20px 30px black;
+        }
+    </style>
+    <!-- 使用 PeerJS 实现简单可靠的 P2P 联机 (无需任何后端, WebRTC) -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+
+<div class="game-wrapper">
+    <div class="board-panel">
+        <canvas id="gomokuCanvas" width="540" height="540"></canvas>
+    </div>
+
+    <div class="info-bar">
+        <div class="turn-box" id="turnIndicator">
+            <span class="piece-icon" id="turnIcon"></span>
+            <span id="turnText">黑棋回合</span>
+        </div>
+        <div class="room-section" id="roomSection">
+            <span>🏠 房间号</span>
+            <span class="room-code" id="roomCodeDisplay">无</span>
+        </div>
+        <div class="mode-badge" id="modeBadge">🎮 本地双人</div>
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap;">
+        <button id="localModeBtn">👥 本地双人</button>
+        <button id="createRoomBtn">✨ 创建联机房间</button>
+        <button id="joinRoomBtn">🔗 加入房间</button>
+        <button id="restartGameBtn">🔄 重新开局</button>
+        <button id="undoMoveBtn" class="btn-danger">↩️ 悔棋</button>
+    </div>
+
+    <div id="linkContainer" style="display: none;" class="link-copy-area">
+        <input type="text" id="roomLinkInput" readonly placeholder="房间链接/ID">
+        <button id="copyLinkBtn">📋 复制房间号</button>
+    </div>
+    <footer>⚡ 无时间限制 · 回合制 · 支持悔棋/重开 · 房间号永久有效直到关闭页面</footer>
+</div>
+
+<div class="mask" id="resultMask">
+    <div class="mask-content">
+        <h2 id="resultText"></h2>
+        <br>
+        <button id="closeMaskBtn">继续对弈</button>
+    </div>
+</div>
+
+<script>
+    // ---------- 五子棋核心逻辑 ----------
+    const BOARD_SIZE = 15;      // 15x15 标准
+    let board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0)); // 0空 1黑 2白
+    let currentTurn = 1;       // 1: 黑棋(先手)  2: 白棋
+    let gameOver = false;
+    let winner = null;          // 'black', 'white' 或 null
+    let historyStack = [];      // 存储 {row, col, player} 悔棋用
+    
+    // 模式相关
+    let gameMode = 'local';     // 'local', 'online_master', 'online_guest'
+    let myColor = 1;            // 本地模式双方都可下，联机模式下本方颜色: 1黑 2白
+    let peer = null;            // PeerJS 实例
+    let currentRoomId = null;   // 房间号 (peerId)
+    let isConnected = false;
+    let connection = null;      // 数据连接
+
+    // DOM 元素
+    const canvas = document.getElementById('gomokuCanvas');
+    const ctx = canvas.getContext('2d');
+    let canvasSize = 540;
+    const cellSize = canvasSize / BOARD_SIZE;
+
+    // 辅助函数
+    function updateBoardUI() {
+        drawFullBoard();
+        updateStatusText();
+    }
+
+    // 检测五子连珠
+    function checkWin(row, col, player) {
+        if (board[row][col] !== player) return false;
+        // 方向向量: 水平, 垂直, 主对角线, 次对角线
+        const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+        for (let [dx, dy] of dirs) {
+            let count = 1;
+            // 正方向延伸
+            for (let step = 1; step <= 5; step++) {
+                const nr = row + dx*step, nc = col + dy*step;
+                if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
+                if (board[nr][nc] === player) count++;
+                else break;
+            }
+            // 反方向延伸
+            for (let step = 1; step <= 5; step++) {
+                const nr = row - dx*step, nc = col - dy*step;
+                if (nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) break;
+                if (board[nr][nc] === player) count++;
+                else break;
+            }
+            if (count >= 5) return true;
+        }
+        return false;
+    }
+
+    // 检查是否平局 (棋盘满了)
+    function isDraw() {
+        for (let i=0; i<BOARD_SIZE; i++) {
+            for (let j=0; j<BOARD_SIZE; j++) {
+                if (board[i][j] === 0) return false;
+            }
+        }
+        return true;
+    }
+
+    // 落子逻辑 (返回是否合法且胜利)
+    function placePiece(row, col, player) {
+        if (gameOver) return false;
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return false;
+        if (board[row][col] !== 0) return false;
+        if (player !== currentTurn) return false;
+        
+        board[row][col] = player;
+        historyStack.push({ row, col, player });
+        
+        const win = checkWin(row, col, player);
+        if (win) {
+            gameOver = true;
+            winner = (player === 1) ? 'black' : 'white';
+            updateBoardUI();
+            showResult(`${winner === 'black' ? '⚫ 黑方' : '⚪ 白方'} 胜利！🎉`);
+            return true;
+        } else if (isDraw()) {
+            gameOver = true;
+            winner = null;
+            updateBoardUI();
+            showResult("平局！ 🤝");
+            return true;
+        }
+        
+        // 切换回合
+        currentTurn = (currentTurn === 1) ? 2 : 1;
+        updateBoardUI();
+        return true;
+    }
+
+    // 悔棋 (撤销最后一步)
+    function undoLastMove() {
+        if (gameOver) {
+            showToast("游戏已结束，请重新开始");
+            return false;
+        }
+        if (historyStack.length === 0) return false;
+        
+        // 联机模式下: 必须是自己回合且自己的棋子才能悔棋? 简易规则: 允许悔棋,但是撤销自己的上一步 + 对方上一步?
+        // 为体验友好, 悔棋撤销最后两步(自己和对方各一步)，保证悔棋后轮到当前玩家。
+        // 本地双人: 撤销最后两步 (一个完整的回合)
+        // 联机: 只允许发起悔棋，需要双方同步？为简化且友好，悔棋撤回最近2步(对方一手+自己一手)，确保回合回到本方。
+        if (historyStack.length >= 2) {
+            const last = historyStack.pop();
+            board[last.row][last.col] = 0;
+            const second = historyStack.pop();
+            board[second.row][second.col] = 0;
+            currentTurn = second.player;  // 回到第二步落子之前的玩家
+        } else if (historyStack.length === 1) {
+            const only = historyStack.pop();
+            board[only.row][only.col] = 0;
+            currentTurn = 1;   // 黑棋先手
+        } else {
+            return false;
+        }
+        
+        // 清除胜利/结束标志
+        gameOver = false;
+        winner = null;
+        updateBoardUI();
+        
+        // 联机模式下需要同步棋盘状态给对端
+        if (gameMode !== 'local' && connection && connection.open) {
+            sendGameStateToPeer();
+        }
+        return true;
+    }
+
+    // 重置游戏
+    function resetGame() {
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        gameOver = false;
+        winner = null;
+        currentTurn = 1;   // 黑棋先手
+        
+        updateBoardUI();
+        
+        if (gameMode !== 'local' && connection && connection.open) {
+            sendGameStateToPeer();
+        }
+        showToast("游戏已重置，黑棋先行");
+    }
+
+    // 发送完整游戏状态给队友 (同步)
+    function sendGameStateToPeer() {
+        if (!connection || !connection.open) return;
+        connection.send({
+            type: 'sync',
+            board: board,
+            currentTurn: currentTurn,
+            gameOver: gameOver,
+            winner: winner,
+            historyLen: historyStack.length  // 粗略同步, 但棋盘已全量
+        });
+    }
+
+    // 绘制完整棋盘 (漂亮)
+    function drawFullBoard() {
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+        ctx.clearRect(0, 0, canvasSize, canvasSize);
+        ctx.fillStyle = '#faf0cf';
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#5a3e2e';
+        for (let i = 0; i < BOARD_SIZE; i++) {
+            ctx.beginPath();
+            ctx.moveTo(cellSize/2 + i * cellSize, cellSize/2);
+            ctx.lineTo(cellSize/2 + i * cellSize, canvasSize - cellSize/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cellSize/2, cellSize/2 + i * cellSize);
+            ctx.lineTo(canvasSize - cellSize/2, cellSize/2 + i * cellSize);
+            ctx.stroke();
+        }
+        // 画星位 (天元/小目)
+        const starPos = [[7,7],[3,3],[11,3],[3,11],[11,11]];
+        for (let [r,c] of starPos) {
+            ctx.fillStyle = '#b87840';
+            ctx.beginPath();
+            ctx.arc(cellSize/2 + r*cellSize, cellSize/2 + c*cellSize, cellSize*0.11, 0, 2*Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#e0a56b';
+            ctx.beginPath();
+            ctx.arc(cellSize/2 + r*cellSize, cellSize/2 + c*cellSize, cellSize*0.07, 0, 2*Math.PI);
+            ctx.fill();
+        }
+        
+        // 绘制棋子
+        for (let i=0; i<BOARD_SIZE; i++) {
+            for (let j=0; j<BOARD_SIZE; j++) {
+                const val = board[i][j];
+                if (val === 0) continue;
+                const x = cellSize/2 + i * cellSize;
+                const y = cellSize/2 + j * cellSize;
+                const grad = ctx.createRadialGradient(x-4, y-4, 5, x, y, cellSize*0.38);
+                if (val === 1) {
+                    grad.addColorStop(0, '#2c2c2c');
+                    grad.addColorStop(1, '#111');
+                    ctx.fillStyle = grad;
+                } else {
+                    grad.addColorStop(0, '#fefefe');
+                    grad.addColorStop(1, '#cacaca');
+                    ctx.fillStyle = grad;
+                }
+                ctx.shadowBlur = 0;
+                ctx.beginPath();
+                ctx.arc(x, y, cellSize*0.4, 0, 2*Math.PI);
+                ctx.fill();
+                ctx.strokeStyle = '#5e4b36';
+                ctx.lineWidth = 0.6;
+                ctx.stroke();
+            }
+        }
+        ctx.shadowBlur = 0;
+    }
+
+    function updateStatusText() {
+        const turnSpan = document.getElementById('turnText');
+        const turnIcon = document.getElementById('turnIcon');
+        const modeSpan = document.getElementById('modeBadge');
+        
+        if (gameOver) {
+            turnSpan.innerText = winner === 'black' ? '🏆 黑方获胜' : (winner === 'white' ? '🏆 白方获胜' : '平局');
+            turnIcon.className = 'piece-icon';
+            return;
+        }
+        
+        let displayText = '';
+        if (gameMode === 'local') {
+            displayText = currentTurn === 1 ? '黑棋回合' : '白棋回合';
+            turnIcon.className = `piece-icon ${currentTurn === 1 ? 'piece-black' : 'piece-white'}`;
+            turnSpan.innerText = displayText;
+        } else {
+            // 联机模式显示: 如果本方颜色和currentTurn一致则提示"你的回合", 否则等待
+            if (!gameOver && myColor === currentTurn) {
+                displayText = (myColor === 1 ? '⚫ 你的回合' : '⚪ 你的回合');
+                turnIcon.className = `piece-icon ${myColor === 1 ? 'piece-black' : 'piece-white'}`;
+                turnSpan.innerText = displayText;
+            } else if (!gameOver) {
+                displayText = '等待对方落子...';
+                turnIcon.className = `piece-icon ${currentTurn === 1 ? 'piece-black' : 'piece-white'}`;
+                turnSpan.innerText = displayText;
+            } else {
+                turnSpan.innerText = gameOver ? (winner ? '对局结束' : '平局') : '';
+            }
+        }
+        if (gameMode === 'local') modeSpan.innerText = '🎮 本地双人';
+        else if (gameMode === 'online_master') modeSpan.innerText = '🌐 房主(联机)';
+        else if (gameMode === 'online_guest') modeSpan.innerText = '🌐 联机成员';
+    }
+
+    function showResult(msg) {
+        const mask = document.getElementById('resultMask');
+        document.getElementById('resultText').innerText = msg;
+        mask.style.display = 'flex';
+    }
+    window.closeMask = function() {
+        document.getElementById('resultMask').style.display = 'none';
+    };
+    document.getElementById('closeMaskBtn').addEventListener('click', () => {
+        document.getElementById('resultMask').style.display = 'none';
+    });
+    
+    function showToast(msg) {
+        let toast = document.getElementById('dynamicToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'dynamicToast';
+            toast.style.position = 'fixed';
+            toast.style.bottom = '80px';
+            toast.style.left = '50%';
+            toast.style.transform = 'translateX(-50%)';
+            toast.style.backgroundColor = '#2a241eee';
+            toast.style.color = '#ffefb9';
+            toast.style.padding = '8px 20px';
+            toast.style.borderRadius = '50px';
+            toast.style.fontSize = '0.85rem';
+            toast.style.zIndex = '1001';
+            toast.style.backdropFilter = 'blur(5px)';
+            document.body.appendChild(toast);
+        }
+        toast.innerText = msg;
+        toast.style.opacity = '1';
+        setTimeout(() => { toast.style.opacity = '0'; }, 1800);
+    }
+
+    // 处理落子 (点击canvas)
+    function handleCanvasClick(e) {
+        if (gameOver) {
+            showToast("游戏已经结束，请重新开局");
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        const gridPosX = Math.round((mouseX - cellSize/2) / cellSize);
+        const gridPosY = Math.round((mouseY - cellSize/2) / cellSize);
+        if (gridPosX < 0 || gridPosX >= BOARD_SIZE || gridPosY < 0 || gridPosY >= BOARD_SIZE) return;
+        const dx = Math.abs(mouseX - (cellSize/2 + gridPosX * cellSize));
+        const dy = Math.abs(mouseY - (cellSize/2 + gridPosY * cellSize));
+        if (dx > cellSize*0.4 || dy > cellSize*0.4) return;
+        
+        // 本地模式 或 联机模式且轮到本方且连接正常
+        if (gameMode === 'local') {
+            placePiece(gridPosX, gridPosY, currentTurn);
+        } 
+        else if ((gameMode === 'online_master' || gameMode === 'online_guest') && connection && connection.open) {
+            if (gameOver) return;
+            if (currentTurn !== myColor) {
+                showToast("请等待对方落子");
+                return;
+            }
+            if (board[gridPosX][gridPosY] !== 0) {
+                showToast("这里已有棋子");
+                return;
+            }
+            // 本地先尝试落子并更新，然后发送给对方
+            const success = placePiece(gridPosX, gridPosY, myColor);
+            if (success) {
+                // 发送移动指令给队友
+                connection.send({
+                    type: 'move',
+                    row: gridPosX,
+                    col: gridPosY,
+                    player: myColor,
+                    turnAfter: currentTurn  // 新的回合
+                });
+            }
+        } else {
+            showToast("联机连接未建立，请先创建/加入房间");
+        }
+    }
+
+    // ----- 联机部分 (PeerJS) -----
+    function destroyPeer() {
+        if (connection && connection.open) connection.close();
+        if (peer) peer.destroy();
+        peer = null;
+        connection = null;
+        isConnected = false;
+    }
+    
+    function setupPeerEvents(peerInstance, isCreator, roomId = null) {
+        peerInstance.on('error', (err) => {
+            console.error(err);
+            showToast("连接错误: " + err.message);
+            resetToLocalMode();
+        });
+        if (isCreator) {
+            // 房主等待连接
+            peerInstance.on('connection', (conn) => {
+                if (connection && connection.open) {
+                    conn.close();
+                    showToast("已有连接，拒绝新连接");
+                    return;
+                }
+                connection = conn;
+                setupConnection(conn, true);
+            });
+        } else {
+            // 加入者主动连接房主
+            if (!roomId) return;
+            const conn = peerInstance.connect(roomId);
+            setupConnection(conn, false);
+        }
+    }
+    
+    function setupConnection(conn, isMasterSide) {
+        conn.on('open', () => {
+            isConnected = true;
+            if (isMasterSide) {
+                // 房主: 本方黑棋 (1)
+                gameMode = 'online_master';
+                myColor = 1;
+                currentTurn = 1;
+                gameOver = false;
+                winner = null;
+                board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+                historyStack = [];
+                updateBoardUI();
+                showToast("联机成功！你是黑棋（先手）");
+                document.getElementById('roomCodeDisplay').innerText = currentRoomId;
+                // 同步初始状态
+                conn.send({ type: 'sync', board: board, currentTurn: 1, gameOver: false, winner: null, init: true });
+            } else {
+                // 加入者: 白棋
+                gameMode = 'online_guest';
+                myColor = 2;
+                currentTurn = 1; // 等待黑棋先下
+                gameOver = false;
+                board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+                historyStack = [];
+                updateBoardUI();
+                showToast("联机成功！你是白棋，等待黑方落子");
+                document.getElementById('roomCodeDisplay').innerText = currentRoomId;
+            }
+            updateStatusText();
+            drawFullBoard();
+        });
+        
+        conn.on('data', (data) => {
+            if (data.type === 'move') {
+                if (gameOver) return;
+                // 对方落子
+                if (currentTurn !== (myColor === 1 ? 2 : 1)) return; // 不是对方回合忽略
+                const { row, col, player } = data;
+                if (board[row][col] !== 0) return;
+                board[row][col] = player;
+                historyStack.push({ row, col, player });
+                const win = checkWin(row, col, player);
+                if (win) {
+                    gameOver = true;
+                    winner = (player === 1) ? 'black' : 'white';
+                    updateBoardUI();
+                    showResult(`${winner === 'black' ? '⚫ 黑方' : '⚪ 白方'} 胜利！`);
+                } else if (isDraw()) {
+                    gameOver = true;
+                    winner = null;
+                    updateBoardUI();
+                    showResult("平局！");
+                } else {
+                    currentTurn = (currentTurn === 1) ? 2 : 1;
+                    updateBoardUI();
+                }
+            } 
+            else if (data.type === 'sync') {
+                // 同步对方棋盘 (重置/悔棋后同步)
+                board = data.board;
+                currentTurn = data.currentTurn;
+                gameOver = data.gameOver;
+                winner = data.winner;
+                historyStack = []; // 粗略同步,但为了悔棋保持本地记录重新构建
+                updateBoardUI();
+                if (gameOver && winner) showResult(`${winner === 'black' ? '黑方' : '白方'}胜利`);
+                else if (gameOver) showResult("平局");
+            }
+        });
+        
+        conn.on('close', () => {
+            showToast("对方已断开连接，回到本地模式");
+            resetToLocalMode();
+        });
+    }
+    
+    function resetToLocalMode() {
+        destroyPeer();
+        gameMode = 'local';
+        myColor = 1;
+        currentTurn = 1;
+        gameOver = false;
+        winner = null;
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        currentRoomId = null;
+        isConnected = false;
+        document.getElementById('roomCodeDisplay').innerText = '无';
+        document.getElementById('linkContainer').style.display = 'none';
+        updateBoardUI();
+        showToast("已切换至本地双人模式");
+    }
+    
+    // 创建房间
+    function createOnlineRoom() {
+        if (gameMode !== 'local') resetToLocalMode();
+        destroyPeer();
+        const newPeer = new Peer();  // 随机ID
+        peer = newPeer;
+        newPeer.on('open', (id) => {
+            currentRoomId = id;
+            document.getElementById('roomCodeDisplay').innerText = id;
+            const linkInput = document.getElementById('roomLinkInput');
+            linkInput.value = id;
+            document.getElementById('linkContainer').style.display = 'flex';
+            showToast(`房间号: ${id} , 分享给好友加入`);
+            setupPeerEvents(newPeer, true);
+        });
+        newPeer.on('error', (err) => {
+            showToast("创建房间失败，请刷新重试");
+            console.error(err);
+        });
+    }
+    
+    function joinRoomWithId(roomId) {
+        if (!roomId) {
+            let inputId = prompt("请输入对方的房间号:");
+            if (!inputId) return;
+            roomId = inputId.trim();
+        }
+        if (gameMode !== 'local') resetToLocalMode();
+        destroyPeer();
+        const newPeer = new Peer();
+        peer = newPeer;
+        newPeer.on('open', () => {
+            currentRoomId = roomId;
+            document.getElementById('roomCodeDisplay').innerText = roomId;
+            document.getElementById('linkContainer').style.display = 'none';
+            setupPeerEvents(newPeer, false, roomId);
+        });
+        newPeer.on('error', () => {
+            showToast("加入失败，请检查房间号是否正确");
+        });
+    }
+    
+    // 事件绑定
+    document.getElementById('localModeBtn').addEventListener('click', () => resetToLocalMode());
+    document.getElementById('createRoomBtn').addEventListener('click', () => createOnlineRoom());
+    document.getElementById('joinRoomBtn').addEventListener('click', () => joinRoomWithId(null));
+    document.getElementById('restartGameBtn').addEventListener('click', () => resetGame());
+    document.getElementById('undoMoveBtn').addEventListener('click', () => {
+        if (gameMode !== 'local' && connection && connection.open) {
+            // 联机悔棋：请求悔棋同步，简单同步棋盘全状态
+            if (historyStack.length === 0) return;
+            undoLastMove();
+            sendGameStateToPeer();
+        } else {
+            undoLastMove();
+        }
+    });
+    document.getElementById('copyLinkBtn').addEventListener('click', () => {
+        const roomId = currentRoomId;
+        if (roomId) {
+            navigator.clipboard.writeText(roomId);
+            showToast("房间号已复制，分享给好友吧~");
+        } else {
+            showToast("暂无房间号");
+        }
+    });
+    canvas.addEventListener('click', handleCanvasClick);
+    
+    // 初始化
+    function init() {
+        gameMode = 'local';
+        myColor = 1;
+        currentTurn = 1;
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        gameOver = false;
+        winner = null;
+        drawFullBoard();
+        updateStatusText();
+    }
+    init();
+</script>
+</body>
+</html>
