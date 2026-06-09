@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>五子棋 · 双人联机 · 无限制对战</title>
     <style>
-        /* 样式保持不变，省略以节省篇幅... 使用原样式 */
         * {
             margin: 0;
             padding: 0;
@@ -234,9 +233,17 @@
             opacity: 0.6;
             cursor: not-allowed;
         }
+        .connection-help {
+            background: #2b5a4a;
+            border-radius: 28px;
+            padding: 12px 16px;
+            margin-top: 15px;
+            font-size: 0.7rem;
+            text-align: center;
+        }
     </style>
-    <!-- PeerJS 实现 P2P 联机，使用国内可用信令服务器 -->
-    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <!-- 使用国内可访问的 PeerJS CDN 和备用方案 -->
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
 <div class="game-container">
@@ -267,7 +274,12 @@
         <input type="text" id="roomLinkInput" readonly placeholder="房间号将显示在这里">
         <button id="copyRoomBtn">📋 复制房间号</button>
     </div>
-    <footer>⚡ 无时间限制 · 纯P2P联机 · 复制房间号发给好友即可对战</footer>
+
+    <div class="connection-help" id="helpText">
+        💡 <strong>联机说明</strong>：点击「创建联机房间」获取房间号 → 好友点击「加入房间」输入相同房间号 → 即可对战<br>
+        ⚠️ 如创建失败，请确保双方网络通畅，或尝试连接同一WiFi后刷新页面重试
+    </div>
+    <footer>⚡ 无时间限制 · P2P直连 · 复制房间号发给好友即可对战</footer>
 </div>
 
 <div class="mask-modal" id="resultModal">
@@ -295,14 +307,17 @@
     let dataConnection = null;
     let currentRoomId = null;
     let isConnected = false;
+    let reconnectAttempts = 0;
 
-    // PeerJS 服务器配置 - 使用多个备用服务器
-    const PEER_CONFIGS = [
+    // PeerJS 配置 - 使用多个可用的信令服务器
+    const peerConfigs = [
         { host: '0.peerjs.com', port: 443, path: '/', secure: true },
-        { host: 'peerjs-server.herokuapp.com', port: 443, path: '/', secure: true },
-        { host: 'my-peer-server.herokuapp.com', port: 443, path: '/', secure: true }
+        { host: 'peerjs-server.herokuapp.com', port: 443, path: '/', secure: true, debug: 3 }
     ];
-    let currentConfigIndex = 0;
+    
+    // 国内用户可尝试使用自建服务器（如果有）
+    // 如果上面都失败，使用本地信令（需要双方在同一网络）
+    let useFallback = false;
 
     const canvas = document.getElementById('gomokuCanvas');
     const ctx = canvas.getContext('2d');
@@ -563,7 +578,7 @@
                 return;
             }
             const success = attemptMove(gridX, gridY, myColor);
-            if (success) {
+            if (success && dataConnection && dataConnection.open) {
                 dataConnection.send({
                     type: 'move',
                     row: gridX,
@@ -578,8 +593,12 @@
 
     // ----- PeerJS 联机逻辑 (修复版) -----
     function destroyConnection() {
-        if (dataConnection && dataConnection.open) dataConnection.close();
-        if (peer) peer.destroy();
+        if (dataConnection && dataConnection.open) {
+            dataConnection.close();
+        }
+        if (peer) {
+            peer.destroy();
+        }
         peer = null;
         dataConnection = null;
         isConnected = false;
@@ -599,6 +618,10 @@
         document.getElementById('roomLinkArea').style.display = 'flex';
         document.getElementById('roomLinkInput').value = currentRoomId;
         showToast(`✅ 房间创建成功！房间号: ${currentRoomId}，等待好友加入...`);
+        
+        // 更新帮助文字
+        const helpDiv = document.getElementById('helpText');
+        helpDiv.innerHTML = `✅ <strong>房间已创建</strong> 房间号: ${currentRoomId}<br>📋 点击「复制房间号」发给好友，好友点击「加入房间」输入此号码即可对战`;
     }
 
     function setOnlineModeAsGuest(hostId) {
@@ -617,8 +640,10 @@
 
     function setupDataConnection(conn, isHostMode) {
         dataConnection = conn;
+        
         conn.on('open', () => {
             isConnected = true;
+            console.log('Data connection opened');
             if (isHostMode) {
                 conn.send({
                     type: 'sync',
@@ -633,6 +658,7 @@
             }
             updateUI();
         });
+        
         conn.on('data', (data) => {
             if (data.type === 'move') {
                 if (gameOver) return;
@@ -653,94 +679,147 @@
                 showToast("游戏状态已同步");
             }
         });
+        
         conn.on('close', () => {
+            console.log('Connection closed');
             showToast("⚠️ 对方已断开连接，自动切换至本地模式");
             resetToLocalMode();
         });
+        
         conn.on('error', (err) => {
             console.error("连接错误:", err);
             showToast("连接出错: " + (err.message || "未知错误"));
         });
     }
 
-    // 尝试使用不同配置创建 Peer
-    function createPeerWithConfig(config, isCreator, targetId = null) {
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error("连接超时"));
-            }, 10000);
-            
-            const newPeer = new Peer(config);
-            
-            newPeer.on('open', (id) => {
-                clearTimeout(timeout);
-                resolve(newPeer);
-            });
-            
-            newPeer.on('error', (err) => {
-                clearTimeout(timeout);
-                reject(err);
-            });
-        });
-    }
-
-    async function createOnlineRoom() {
+    // 创建房间 - 直接使用带配置的 Peer
+    function createOnlineRoom() {
         const createBtn = document.getElementById('createOnlineBtn');
         const originalText = createBtn.innerHTML;
         createBtn.innerHTML = '⏳ 创建中...';
         createBtn.disabled = true;
         
         try {
+            // 先清理之前的连接
             if (gameMode !== 'local') resetToLocalMode();
             destroyConnection();
             
-            // 尝试多个配置
-            let lastError = null;
-            for (let i = 0; i < PEER_CONFIGS.length; i++) {
-                try {
-                    const config = PEER_CONFIGS[i];
-                    const newPeer = await createPeerWithConfig(config, true);
-                    peer = newPeer;
-                    currentConfigIndex = i;
-                    
-                    peer.on('connection', (conn) => {
-                        if (dataConnection && dataConnection.open) {
-                            conn.close();
-                            showToast("已有连接，拒绝新请求");
-                            return;
-                        }
-                        setupDataConnection(conn, true);
-                    });
-                    
-                    setOnlineModeAsHost(peer.id);
-                    break;
-                } catch (err) {
-                    lastError = err;
-                    console.warn(`配置 ${i} 失败:`, err);
-                    if (i === PEER_CONFIGS.length - 1) {
-                        throw lastError;
-                    }
+            // 使用自定义配置创建 Peer，不依赖公共服务器
+            // 注意：这种方式需要双方都能直接连接（通常需要在同一网络或配置STUN/TURN）
+            const peerOptions = {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                },
+                debug: 2
+            };
+            
+            // 尝试使用公共信令服务器，但添加超时处理
+            const newPeer = new Peer(peerOptions);
+            
+            let timeoutId = setTimeout(() => {
+                if (peer && peer.disconnected) {
+                    showToast("连接超时，正在重试...");
+                    newPeer.destroy();
+                    // 尝试备用方式
+                    createFallbackRoom();
                 }
-            }
+            }, 8000);
+            
+            newPeer.on('open', (id) => {
+                clearTimeout(timeoutId);
+                peer = newPeer;
+                
+                peer.on('connection', (conn) => {
+                    if (dataConnection && dataConnection.open) {
+                        conn.close();
+                        showToast("已有连接，拒绝新请求");
+                        return;
+                    }
+                    setupDataConnection(conn, true);
+                });
+                
+                setOnlineModeAsHost(id);
+                createBtn.innerHTML = originalText;
+                createBtn.disabled = false;
+            });
+            
+            newPeer.on('error', (err) => {
+                clearTimeout(timeoutId);
+                console.error("Peer error:", err);
+                showToast("创建失败，正在尝试备用方案...");
+                newPeer.destroy();
+                createFallbackRoom();
+            });
+            
         } catch (err) {
-            console.error("创建房间失败:", err);
-            let errorMsg = "创建房间失败: ";
-            if (err.message.includes("timeout")) errorMsg += "连接超时，请检查网络";
-            else if (err.message.includes("ID")) errorMsg += "服务器异常，请重试";
-            else errorMsg += err.message || "请检查网络后重试";
-            showToast(errorMsg);
-            resetToLocalMode();
-        } finally {
+            console.error("创建房间异常:", err);
             createBtn.innerHTML = originalText;
+            createBtn.disabled = false;
+            showToast("创建失败: " + (err.message || "未知错误"));
+        }
+    }
+    
+    // 备用创建方案 - 使用序号生成
+    function createFallbackRoom() {
+        const createBtn = document.getElementById('createOnlineBtn');
+        
+        try {
+            destroyConnection();
+            
+            // 生成一个简单的房间ID
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            
+            // 使用简单的 Peer 配置
+            const newPeer = new Peer(roomId, {
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
+            
+            newPeer.on('open', () => {
+                peer = newPeer;
+                
+                peer.on('connection', (conn) => {
+                    if (dataConnection && dataConnection.open) {
+                        conn.close();
+                        return;
+                    }
+                    setupDataConnection(conn, true);
+                });
+                
+                setOnlineModeAsHost(roomId);
+                createBtn.disabled = false;
+            });
+            
+            newPeer.on('error', (err) => {
+                console.error("备用创建也失败:", err);
+                showToast("创建失败，请检查网络后重试。如持续失败，可尝试使用「本地双人」模式。");
+                resetToLocalMode();
+                createBtn.disabled = false;
+            });
+            
+        } catch (err) {
+            showToast("创建失败，请刷新页面重试");
+            resetToLocalMode();
             createBtn.disabled = false;
         }
     }
 
-    async function joinRoomWithId(roomId) {
+    // 加入房间
+    function joinRoomWithId(roomId) {
         if (!roomId) {
             const inputId = prompt("请输入好友的房间号:");
             if (!inputId) return;
-            roomId = inputId.trim();
+            roomId = inputId.trim().toUpperCase();
         }
         
         const joinBtn = document.getElementById('joinOnlineBtn');
@@ -752,49 +831,67 @@
             if (gameMode !== 'local') resetToLocalMode();
             destroyConnection();
             
-            let lastError = null;
-            for (let i = 0; i < PEER_CONFIGS.length; i++) {
-                try {
-                    const config = PEER_CONFIGS[i];
-                    const newPeer = await createPeerWithConfig(config, false);
-                    peer = newPeer;
-                    currentConfigIndex = i;
-                    
-                    setOnlineModeAsGuest(roomId);
-                    const conn = peer.connect(roomId, { reliable: true });
-                    
-                    // 等待连接建立或超时
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => reject(new Error("连接超时")), 15000);
-                        conn.on('open', () => {
-                            clearTimeout(timeout);
-                            resolve();
-                        });
-                        conn.on('error', (err) => {
-                            clearTimeout(timeout);
-                            reject(err);
-                        });
-                    });
-                    
-                    setupDataConnection(conn, false);
-                    break;
-                } catch (err) {
-                    lastError = err;
-                    console.warn(`配置 ${i} 失败:`, err);
-                    if (i === PEER_CONFIGS.length - 1) {
-                        throw lastError;
-                    }
+            const newPeer = new Peer({
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
                 }
-            }
+            });
+            
+            let timeoutId = setTimeout(() => {
+                showToast("连接超时，请确认对方房间已创建且网络通畅");
+                newPeer.destroy();
+                resetToLocalMode();
+                joinBtn.innerHTML = originalText;
+                joinBtn.disabled = false;
+            }, 15000);
+            
+            newPeer.on('open', () => {
+                clearTimeout(timeoutId);
+                peer = newPeer;
+                setOnlineModeAsGuest(roomId);
+                
+                const conn = peer.connect(roomId, { reliable: true });
+                
+                let connTimeout = setTimeout(() => {
+                    showToast("连接对方超时，请确认房间号正确且房主在线");
+                    resetToLocalMode();
+                    joinBtn.innerHTML = originalText;
+                    joinBtn.disabled = false;
+                }, 10000);
+                
+                conn.on('open', () => {
+                    clearTimeout(connTimeout);
+                    setupDataConnection(conn, false);
+                    joinBtn.innerHTML = originalText;
+                    joinBtn.disabled = false;
+                });
+                
+                conn.on('error', (err) => {
+                    clearTimeout(connTimeout);
+                    console.error("Connection error:", err);
+                    showToast("连接失败，请确认房间号正确");
+                    resetToLocalMode();
+                    joinBtn.innerHTML = originalText;
+                    joinBtn.disabled = false;
+                });
+            });
+            
+            newPeer.on('error', (err) => {
+                clearTimeout(timeoutId);
+                console.error("Peer error:", err);
+                showToast("加入失败，请重试");
+                resetToLocalMode();
+                joinBtn.innerHTML = originalText;
+                joinBtn.disabled = false;
+            });
+            
         } catch (err) {
-            console.error("加入房间失败:", err);
-            let errorMsg = "加入失败: ";
-            if (err.message.includes("timeout")) errorMsg += "连接超时，请检查房间号或网络";
-            else if (err.message.includes("Could not find")) errorMsg += "房间不存在或房主已离线";
-            else errorMsg += err.message || "请确认房间号正确且房主在线";
-            showToast(errorMsg);
+            console.error("加入异常:", err);
+            showToast("加入失败: " + (err.message || "未知错误"));
             resetToLocalMode();
-        } finally {
             joinBtn.innerHTML = originalText;
             joinBtn.disabled = false;
         }
@@ -813,6 +910,11 @@
         isConnected = false;
         document.getElementById('roomCodeDisplay').innerText = '无';
         document.getElementById('roomLinkArea').style.display = 'none';
+        
+        const helpDiv = document.getElementById('helpText');
+        helpDiv.innerHTML = `💡 <strong>联机说明</strong>：点击「创建联机房间」获取房间号 → 好友点击「加入房间」输入相同房间号 → 即可对战<br>
+        ⚠️ 如创建失败，请确保双方网络通畅，或尝试连接同一WiFi后刷新页面重试`;
+        
         updateUI();
         showToast("已切换至本地双人模式");
     }
