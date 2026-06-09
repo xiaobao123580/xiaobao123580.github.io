@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>五子棋 · 双人联机 · 无限制对战</title>
+    <style>
+        /* 样式保持不变，省略以节省篇幅... 使用原样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(145deg, #1f5e4b 0%, #0f3b2f 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', 'Roboto', 'Noto Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: #e8d2a4;
+            background-image: radial-gradient(circle at 20% 30%, rgba(190, 150, 90, 0.25) 2.5%, transparent 2.5%);
+            background-size: 32px 32px;
+            border-radius: 56px;
+            padding: 22px 20px 28px;
+            box-shadow: 0 25px 40px rgba(0, 0, 0, 0.5), inset 0 1px 3px rgba(255, 245, 200, 0.8);
+        }
+
+        .board-wrapper {
+            background: #f5eaca;
+            border-radius: 32px;
+            padding: 14px;
+            box-shadow: inset 0 0 0 2px #fff7e0, 0 12px 24px rgba(0, 0, 0, 0.25);
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #faf0cf;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            height: auto;
+        }
+
+        .info-panel {
+            margin-top: 22px;
+            background: #2b2a24dd;
+            backdrop-filter: blur(10px);
+            border-radius: 60px;
+            padding: 12px 20px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            color: #fcf3da;
+            font-weight: 600;
+        }
+
+        .turn-card {
+            background: #3c2c1d;
+            padding: 5px 18px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.95rem;
+        }
+
+        .piece-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+        }
+        .piece-black {
+            background: radial-gradient(circle at 35% 35%, #3a3a3a, #0a0a0a);
+            box-shadow: inset -1px -1px 0 #2f2f2f, 0 1px 1px rgba(255,255,200,0.3);
+        }
+        .piece-white {
+            background: radial-gradient(circle at 35% 35%, #f8f8ff, #cbcbd9);
+            box-shadow: inset -1px -1px 0 #aaa, 0 1px 1px white;
+        }
+
+        .room-area {
+            background: #1f2e28;
+            padding: 4px 18px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.85rem;
+        }
+
+        .room-code {
+            font-family: 'Fira Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            background: #00000066;
+            padding: 4px 12px;
+            border-radius: 36px;
+            letter-spacing: 1px;
+        }
+
+        button {
+            background: #ffcd7e;
+            border: none;
+            padding: 7px 18px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: 0.1s linear;
+            color: #2d241b;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        button:active {
+            transform: scale(0.96);
+        }
+        .danger-btn {
+            background: #cf7f55;
+            color: white;
+        }
+        .success-btn {
+            background: #5f8b6e;
+            color: white;
+        }
+        .status-text {
+            background: #00000077;
+            padding: 4px 14px;
+            border-radius: 32px;
+            font-size: 0.8rem;
+        }
+
+        .link-card {
+            margin-top: 16px;
+            background: #2f3730cc;
+            border-radius: 48px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            backdrop-filter: blur(4px);
+        }
+        .link-card input {
+            flex: 1;
+            background: #fff1da;
+            border: none;
+            padding: 9px 14px;
+            border-radius: 40px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            outline: none;
+            font-weight: bold;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 20px;
+            color: #ebdfb0;
+        }
+
+        @media (max-width: 560px) {
+            .info-panel { flex-direction: column; align-items: stretch; }
+            .room-area { justify-content: space-between; }
+            .turn-card { justify-content: center; }
+        }
+
+        .mask-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .mask-content {
+            background: #fff6e8;
+            padding: 32px 40px;
+            border-radius: 56px;
+            text-align: center;
+            box-shadow: 0 20px 35px black;
+        }
+        .toast-msg {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #22201be6;
+            backdrop-filter: blur(10px);
+            color: #ffecb3;
+            padding: 8px 24px;
+            border-radius: 60px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            z-index: 1100;
+            transition: 0.2s;
+            opacity: 0;
+            white-space: nowrap;
+        }
+        @media (max-width: 500px) {
+            .toast-msg { white-space: normal; text-align: center; width: 80%; }
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.6s linear infinite;
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+    <!-- PeerJS 实现 P2P 联机，使用国内可用信令服务器 -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+<div class="game-container">
+    <div class="board-wrapper">
+        <canvas id="gomokuCanvas" width="570" height="570"></canvas>
+    </div>
+
+    <div class="info-panel">
+        <div class="turn-card" id="turnCard">
+            <span class="piece-badge" id="turnBadge"></span>
+            <span id="turnText">黑棋回合</span>
+        </div>
+        <div class="room-area">
+            🏷️ 房间号 <span class="room-code" id="roomCodeDisplay">无</span>
+        </div>
+        <div class="status-text" id="modeLabel">🎮 本地模式</div>
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: center; margin: 16px 0 8px; flex-wrap: wrap;">
+        <button id="localModeBtn">👥 本地双人</button>
+        <button id="createOnlineBtn">✨ 创建联机房间</button>
+        <button id="joinOnlineBtn">🔗 加入房间</button>
+        <button id="resetGameBtn">🔄 重新开局</button>
+        <button id="undoBtn" class="danger-btn">↩️ 悔棋</button>
+    </div>
+
+    <div id="roomLinkArea" style="display: none;" class="link-card">
+        <input type="text" id="roomLinkInput" readonly placeholder="房间号将显示在这里">
+        <button id="copyRoomBtn">📋 复制房间号</button>
+    </div>
+    <footer>⚡ 无时间限制 · 纯P2P联机 · 复制房间号发给好友即可对战</footer>
+</div>
+
+<div class="mask-modal" id="resultModal">
+    <div class="mask-content">
+        <h2 id="resultMessage"></h2>
+        <br>
+        <button id="closeModalBtn">继续对局</button>
+    </div>
+</div>
+<div class="toast-msg" id="globalToast"></div>
+
+<script>
+    // ---------- 五子棋核心引擎 ----------
+    const BOARD_SIZE = 15;
+    let board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+    let currentTurn = 1;
+    let gameOver = false;
+    let winner = null;
+    let historyStack = [];
+
+    // 联机状态
+    let gameMode = 'local';
+    let myColor = 1;
+    let peer = null;
+    let dataConnection = null;
+    let currentRoomId = null;
+    let isConnected = false;
+
+    // PeerJS 服务器配置 - 使用多个备用服务器
+    const PEER_CONFIGS = [
+        { host: '0.peerjs.com', port: 443, path: '/', secure: true },
+        { host: 'peerjs-server.herokuapp.com', port: 443, path: '/', secure: true },
+        { host: 'my-peer-server.herokuapp.com', port: 443, path: '/', secure: true }
+    ];
+    let currentConfigIndex = 0;
+
+    const canvas = document.getElementById('gomokuCanvas');
+    const ctx = canvas.getContext('2d');
+    let canvasSize = 570;
+    const cellSize = canvasSize / BOARD_SIZE;
+
+    function showToast(msg, duration = 2500) {
+        const toast = document.getElementById('globalToast');
+        toast.innerText = msg;
+        toast.style.opacity = '1';
+        setTimeout(() => {
+            toast.style.opacity = '0';
+        }, duration);
+    }
+
+    function showResultModal(msg) {
+        document.getElementById('resultMessage').innerText = msg;
+        document.getElementById('resultModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('resultModal').style.display = 'none';
+    }
+
+    function updateUI() {
+        const turnSpan = document.getElementById('turnText');
+        const turnBadge = document.getElementById('turnBadge');
+        const modeSpan = document.getElementById('modeLabel');
+
+        if (gameOver) {
+            if (winner === 'black') turnSpan.innerText = '🏆 黑方胜利！';
+            else if (winner === 'white') turnSpan.innerText = '🏆 白方胜利！';
+            else turnSpan.innerText = '🤝 平局';
+            turnBadge.className = 'piece-badge';
+            return;
+        }
+
+        if (gameMode === 'local') {
+            turnSpan.innerText = currentTurn === 1 ? '黑棋回合' : '白棋回合';
+            turnBadge.className = `piece-badge ${currentTurn === 1 ? 'piece-black' : 'piece-white'}`;
+            modeSpan.innerText = '🎮 本地双人';
+        } 
+        else if (gameMode === 'online_host') {
+            modeSpan.innerText = '🌐 房主(黑棋)';
+            if (!gameOver && currentTurn === myColor) {
+                turnSpan.innerText = '⚫ 你的回合';
+                turnBadge.className = 'piece-badge piece-black';
+            } else if (!gameOver) {
+                turnSpan.innerText = '⏳ 等待对方落子';
+                turnBadge.className = 'piece-badge piece-white';
+            } else {
+                turnSpan.innerText = gameOver ? '对局结束' : '';
+            }
+        }
+        else if (gameMode === 'online_guest') {
+            modeSpan.innerText = '🌐 成员(白棋)';
+            if (!gameOver && currentTurn === myColor) {
+                turnSpan.innerText = '⚪ 你的回合';
+                turnBadge.className = 'piece-badge piece-white';
+            } else if (!gameOver) {
+                turnSpan.innerText = '⏳ 等待对方落子';
+                turnBadge.className = 'piece-badge piece-black';
+            } else {
+                turnSpan.innerText = gameOver ? '对局结束' : '';
+            }
+        }
+        drawFullBoard();
+    }
+
+    function drawFullBoard() {
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+        ctx.clearRect(0, 0, canvasSize, canvasSize);
+        ctx.fillStyle = '#faf0cf';
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#6b4c3a';
+        for (let i = 0; i < BOARD_SIZE; i++) {
+            ctx.beginPath();
+            ctx.moveTo(cellSize/2 + i * cellSize, cellSize/2);
+            ctx.lineTo(cellSize/2 + i * cellSize, canvasSize - cellSize/2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cellSize/2, cellSize/2 + i * cellSize);
+            ctx.lineTo(canvasSize - cellSize/2, cellSize/2 + i * cellSize);
+            ctx.stroke();
+        }
+        const stars = [[7,7],[3,3],[11,3],[3,11],[11,11]];
+        for (let [r,c] of stars) {
+            ctx.fillStyle = '#bc7a48';
+            ctx.beginPath();
+            ctx.arc(cellSize/2 + r*cellSize, cellSize/2 + c*cellSize, cellSize*0.1, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#e3a56a';
+            ctx.beginPath();
+            ctx.arc(cellSize/2 + r*cellSize, cellSize/2 + c*cellSize, cellSize*0.06, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        for (let i=0; i<BOARD_SIZE; i++) {
+            for (let j=0; j<BOARD_SIZE; j++) {
+                const val = board[i][j];
+                if (val === 0) continue;
+                const x = cellSize/2 + i * cellSize;
+                const y = cellSize/2 + j * cellSize;
+                const grad = ctx.createRadialGradient(x-4, y-4, 5, x, y, cellSize*0.38);
+                if (val === 1) {
+                    grad.addColorStop(0, '#2e2e2e');
+                    grad.addColorStop(1, '#121212');
+                    ctx.fillStyle = grad;
+                } else {
+                    grad.addColorStop(0, '#fdfdfd');
+                    grad.addColorStop(1, '#c9c9d4');
+                    ctx.fillStyle = grad;
+                }
+                ctx.beginPath();
+                ctx.arc(x, y, cellSize*0.4, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = '#775e44';
+                ctx.lineWidth = 0.6;
+                ctx.stroke();
+            }
+        }
+    }
+
+    function checkWin(row, col, playerVal) {
+        if (board[row][col] !== playerVal) return false;
+        const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+        for (let [dx, dy] of dirs) {
+            let cnt = 1;
+            for (let step = 1; step <= 5; step++) {
+                const nr = row + dx*step, nc = col + dy*step;
+                if (nr<0 || nr>=BOARD_SIZE || nc<0 || nc>=BOARD_SIZE) break;
+                if (board[nr][nc] === playerVal) cnt++;
+                else break;
+            }
+            for (let step = 1; step <= 5; step++) {
+                const nr = row - dx*step, nc = col - dy*step;
+                if (nr<0 || nr>=BOARD_SIZE || nc<0 || nc>=BOARD_SIZE) break;
+                if (board[nr][nc] === playerVal) cnt++;
+                else break;
+            }
+            if (cnt >= 5) return true;
+        }
+        return false;
+    }
+
+    function isDrawGame() {
+        for (let i=0;i<BOARD_SIZE;i++)
+            for (let j=0;j<BOARD_SIZE;j++)
+                if (board[i][j] === 0) return false;
+        return true;
+    }
+
+    function attemptMove(row, col, player) {
+        if (gameOver) return false;
+        if (row<0 || row>=BOARD_SIZE || col<0 || col>=BOARD_SIZE) return false;
+        if (board[row][col] !== 0) return false;
+        if (player !== currentTurn) return false;
+
+        board[row][col] = player;
+        historyStack.push({ row, col, player });
+
+        const win = checkWin(row, col, player);
+        if (win) {
+            gameOver = true;
+            winner = (player === 1) ? 'black' : 'white';
+            updateUI();
+            showResultModal(`${winner === 'black' ? '⚫ 黑方' : '⚪ 白方'} 获胜！ 🎉`);
+            return true;
+        }
+        if (isDrawGame()) {
+            gameOver = true;
+            winner = null;
+            updateUI();
+            showResultModal("平局！ 🤝");
+            return true;
+        }
+        currentTurn = (currentTurn === 1) ? 2 : 1;
+        updateUI();
+        return true;
+    }
+
+    function undoMove() {
+        if (gameOver) {
+            showToast("对局已结束，请重新开局");
+            return false;
+        }
+        if (historyStack.length === 0) return false;
+        let stepsToUndo = 2;
+        if (historyStack.length === 1) stepsToUndo = 1;
+        for (let i=0; i<stepsToUndo; i++) {
+            if (historyStack.length === 0) break;
+            const last = historyStack.pop();
+            board[last.row][last.col] = 0;
+        }
+        if (historyStack.length === 0) {
+            currentTurn = 1;
+        } else {
+            const lastMove = historyStack[historyStack.length-1];
+            currentTurn = (lastMove.player === 1) ? 2 : 1;
+        }
+        gameOver = false;
+        winner = null;
+        updateUI();
+        return true;
+    }
+
+    function resetGameLocally() {
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        gameOver = false;
+        winner = null;
+        currentTurn = 1;
+        updateUI();
+        showToast("对局已重置，黑棋先行");
+    }
+
+    function syncFullStateToPeer() {
+        if (dataConnection && dataConnection.open && (gameMode === 'online_host' || gameMode === 'online_guest')) {
+            dataConnection.send({
+                type: 'sync',
+                board: board,
+                turn: currentTurn,
+                gameOver: gameOver,
+                winner: winner
+            });
+        }
+    }
+
+    function onCanvasClick(e) {
+        if (gameOver) {
+            showToast("游戏已经结束，请重新开局");
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+        const gridX = Math.round((mouseX - cellSize/2) / cellSize);
+        const gridY = Math.round((mouseY - cellSize/2) / cellSize);
+        if (gridX<0 || gridX>=BOARD_SIZE || gridY<0 || gridY>=BOARD_SIZE) return;
+        const distX = Math.abs(mouseX - (cellSize/2 + gridX*cellSize));
+        const distY = Math.abs(mouseY - (cellSize/2 + gridY*cellSize));
+        if (distX > cellSize*0.4 || distY > cellSize*0.4) return;
+
+        if (gameMode === 'local') {
+            attemptMove(gridX, gridY, currentTurn);
+        } 
+        else if ((gameMode === 'online_host' || gameMode === 'online_guest') && dataConnection && dataConnection.open) {
+            if (currentTurn !== myColor) {
+                showToast("等待对手落子中...");
+                return;
+            }
+            if (board[gridX][gridY] !== 0) {
+                showToast("这里已有棋子");
+                return;
+            }
+            const success = attemptMove(gridX, gridY, myColor);
+            if (success) {
+                dataConnection.send({
+                    type: 'move',
+                    row: gridX,
+                    col: gridY,
+                    player: myColor
+                });
+            }
+        } else {
+            showToast("联机未连接，请创建或加入房间");
+        }
+    }
+
+    // ----- PeerJS 联机逻辑 (修复版) -----
+    function destroyConnection() {
+        if (dataConnection && dataConnection.open) dataConnection.close();
+        if (peer) peer.destroy();
+        peer = null;
+        dataConnection = null;
+        isConnected = false;
+    }
+
+    function setOnlineModeAsHost(peerId) {
+        currentRoomId = peerId;
+        gameMode = 'online_host';
+        myColor = 1;
+        currentTurn = 1;
+        gameOver = false;
+        winner = null;
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        updateUI();
+        document.getElementById('roomCodeDisplay').innerText = currentRoomId;
+        document.getElementById('roomLinkArea').style.display = 'flex';
+        document.getElementById('roomLinkInput').value = currentRoomId;
+        showToast(`✅ 房间创建成功！房间号: ${currentRoomId}，等待好友加入...`);
+    }
+
+    function setOnlineModeAsGuest(hostId) {
+        currentRoomId = hostId;
+        gameMode = 'online_guest';
+        myColor = 2;
+        currentTurn = 1;
+        gameOver = false;
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        updateUI();
+        document.getElementById('roomCodeDisplay').innerText = currentRoomId;
+        document.getElementById('roomLinkArea').style.display = 'none';
+        showToast(`🔗 正在连接房间 ${hostId}...`);
+    }
+
+    function setupDataConnection(conn, isHostMode) {
+        dataConnection = conn;
+        conn.on('open', () => {
+            isConnected = true;
+            if (isHostMode) {
+                conn.send({
+                    type: 'sync',
+                    board: board,
+                    turn: 1,
+                    gameOver: false,
+                    winner: null
+                });
+                showToast("🎉 对手已加入！游戏开始，黑棋先走");
+            } else {
+                showToast("🎉 连接成功！你是白棋，等待黑棋落子");
+            }
+            updateUI();
+        });
+        conn.on('data', (data) => {
+            if (data.type === 'move') {
+                if (gameOver) return;
+                if (currentTurn === myColor) return;
+                const { row, col, player } = data;
+                if (board[row][col] !== 0) return;
+                attemptMove(row, col, player);
+            } 
+            else if (data.type === 'sync') {
+                board = data.board;
+                currentTurn = data.turn;
+                gameOver = data.gameOver;
+                winner = data.winner;
+                historyStack = [];
+                updateUI();
+                if (gameOver && winner) showResultModal(`${winner === 'black' ? '黑方' : '白方'} 获胜`);
+                else if (gameOver) showResultModal("平局");
+                showToast("游戏状态已同步");
+            }
+        });
+        conn.on('close', () => {
+            showToast("⚠️ 对方已断开连接，自动切换至本地模式");
+            resetToLocalMode();
+        });
+        conn.on('error', (err) => {
+            console.error("连接错误:", err);
+            showToast("连接出错: " + (err.message || "未知错误"));
+        });
+    }
+
+    // 尝试使用不同配置创建 Peer
+    function createPeerWithConfig(config, isCreator, targetId = null) {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error("连接超时"));
+            }, 10000);
+            
+            const newPeer = new Peer(config);
+            
+            newPeer.on('open', (id) => {
+                clearTimeout(timeout);
+                resolve(newPeer);
+            });
+            
+            newPeer.on('error', (err) => {
+                clearTimeout(timeout);
+                reject(err);
+            });
+        });
+    }
+
+    async function createOnlineRoom() {
+        const createBtn = document.getElementById('createOnlineBtn');
+        const originalText = createBtn.innerHTML;
+        createBtn.innerHTML = '⏳ 创建中...';
+        createBtn.disabled = true;
+        
+        try {
+            if (gameMode !== 'local') resetToLocalMode();
+            destroyConnection();
+            
+            // 尝试多个配置
+            let lastError = null;
+            for (let i = 0; i < PEER_CONFIGS.length; i++) {
+                try {
+                    const config = PEER_CONFIGS[i];
+                    const newPeer = await createPeerWithConfig(config, true);
+                    peer = newPeer;
+                    currentConfigIndex = i;
+                    
+                    peer.on('connection', (conn) => {
+                        if (dataConnection && dataConnection.open) {
+                            conn.close();
+                            showToast("已有连接，拒绝新请求");
+                            return;
+                        }
+                        setupDataConnection(conn, true);
+                    });
+                    
+                    setOnlineModeAsHost(peer.id);
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    console.warn(`配置 ${i} 失败:`, err);
+                    if (i === PEER_CONFIGS.length - 1) {
+                        throw lastError;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("创建房间失败:", err);
+            let errorMsg = "创建房间失败: ";
+            if (err.message.includes("timeout")) errorMsg += "连接超时，请检查网络";
+            else if (err.message.includes("ID")) errorMsg += "服务器异常，请重试";
+            else errorMsg += err.message || "请检查网络后重试";
+            showToast(errorMsg);
+            resetToLocalMode();
+        } finally {
+            createBtn.innerHTML = originalText;
+            createBtn.disabled = false;
+        }
+    }
+
+    async function joinRoomWithId(roomId) {
+        if (!roomId) {
+            const inputId = prompt("请输入好友的房间号:");
+            if (!inputId) return;
+            roomId = inputId.trim();
+        }
+        
+        const joinBtn = document.getElementById('joinOnlineBtn');
+        const originalText = joinBtn.innerHTML;
+        joinBtn.innerHTML = '⏳ 加入中...';
+        joinBtn.disabled = true;
+        
+        try {
+            if (gameMode !== 'local') resetToLocalMode();
+            destroyConnection();
+            
+            let lastError = null;
+            for (let i = 0; i < PEER_CONFIGS.length; i++) {
+                try {
+                    const config = PEER_CONFIGS[i];
+                    const newPeer = await createPeerWithConfig(config, false);
+                    peer = newPeer;
+                    currentConfigIndex = i;
+                    
+                    setOnlineModeAsGuest(roomId);
+                    const conn = peer.connect(roomId, { reliable: true });
+                    
+                    // 等待连接建立或超时
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => reject(new Error("连接超时")), 15000);
+                        conn.on('open', () => {
+                            clearTimeout(timeout);
+                            resolve();
+                        });
+                        conn.on('error', (err) => {
+                            clearTimeout(timeout);
+                            reject(err);
+                        });
+                    });
+                    
+                    setupDataConnection(conn, false);
+                    break;
+                } catch (err) {
+                    lastError = err;
+                    console.warn(`配置 ${i} 失败:`, err);
+                    if (i === PEER_CONFIGS.length - 1) {
+                        throw lastError;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("加入房间失败:", err);
+            let errorMsg = "加入失败: ";
+            if (err.message.includes("timeout")) errorMsg += "连接超时，请检查房间号或网络";
+            else if (err.message.includes("Could not find")) errorMsg += "房间不存在或房主已离线";
+            else errorMsg += err.message || "请确认房间号正确且房主在线";
+            showToast(errorMsg);
+            resetToLocalMode();
+        } finally {
+            joinBtn.innerHTML = originalText;
+            joinBtn.disabled = false;
+        }
+    }
+
+    function resetToLocalMode() {
+        destroyConnection();
+        gameMode = 'local';
+        myColor = 1;
+        currentTurn = 1;
+        gameOver = false;
+        winner = null;
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        historyStack = [];
+        currentRoomId = null;
+        isConnected = false;
+        document.getElementById('roomCodeDisplay').innerText = '无';
+        document.getElementById('roomLinkArea').style.display = 'none';
+        updateUI();
+        showToast("已切换至本地双人模式");
+    }
+
+    function resetCurrentGame() {
+        if (gameMode === 'local') {
+            resetGameLocally();
+        } else if ((gameMode === 'online_host' || gameMode === 'online_guest') && dataConnection && dataConnection.open) {
+            board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+            historyStack = [];
+            gameOver = false;
+            winner = null;
+            currentTurn = 1;
+            updateUI();
+            syncFullStateToPeer();
+            showToast("游戏已重置，黑棋先下");
+        } else {
+            resetGameLocally();
+        }
+    }
+
+    function handleUndo() {
+        if (gameMode === 'local') {
+            undoMove();
+        } else if ((gameMode === 'online_host' || gameMode === 'online_guest') && dataConnection && dataConnection.open) {
+            if (undoMove()) {
+                syncFullStateToPeer();
+            } else {
+                showToast("无法悔棋");
+            }
+        } else {
+            undoMove();
+        }
+    }
+
+    // 绑定事件
+    document.getElementById('localModeBtn').addEventListener('click', () => resetToLocalMode());
+    document.getElementById('createOnlineBtn').addEventListener('click', () => createOnlineRoom());
+    document.getElementById('joinOnlineBtn').addEventListener('click', () => joinRoomWithId(null));
+    document.getElementById('resetGameBtn').addEventListener('click', () => resetCurrentGame());
+    document.getElementById('undoBtn').addEventListener('click', () => handleUndo());
+    document.getElementById('copyRoomBtn').addEventListener('click', () => {
+        if (currentRoomId) {
+            navigator.clipboard.writeText(currentRoomId);
+            showToast("房间号已复制，发送给好友吧~");
+        } else {
+            showToast("暂无房间号");
+        }
+    });
+    document.getElementById('closeModalBtn').addEventListener('click', () => closeModal());
+    canvas.addEventListener('click', onCanvasClick);
+
+    function init() {
+        board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        currentTurn = 1;
+        gameOver = false;
+        winner = null;
+        historyStack = [];
+        gameMode = 'local';
+        myColor = 1;
+        updateUI();
+        showToast("🎮 欢迎！点击「创建联机房间」即可与好友对战");
+    }
+    init();
+</script>
+</body>
+</html>
